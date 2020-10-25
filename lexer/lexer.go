@@ -5,7 +5,10 @@ import (
 )
 
 // inputで入ってきたmokey言語は、全てこのlexerにかけられる。
-// Lexerでは入力の文字列と、読み終えた文字列index,次に読み出す文字等を管理する。
+// inputは入力の文字列をstringで扱う。positionには現在読んでいるindex,
+// readPositionはその1つ先のindexが格納される。
+// chには現在扱っている文字(byte)が格納され、リテラル作成や軸判定等に使われる場所である。
+// chはbyteで定義されているのでマルチバイト文字(日本語とは)はサポートしていないことが、実装からわかる。
 type Lexer struct {
 	input        string // 入力の文字列
 	position     int    // 読み終わったindex
@@ -101,7 +104,7 @@ func newToken(tokenType token.TokenType, ch byte) token.Token {
 	return token.Token{Type: tokenType, Literal: string(ch)}
 }
 
-// whitespaceを食い潰す関数
+// nexttokenのヘルパーwhitespaceを食い潰す関数
 func (l *Lexer) skipWhiteSpace() {
 	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
 		l.readChar()
