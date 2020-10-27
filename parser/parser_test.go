@@ -20,6 +20,7 @@ func TestLetStatements(t *testing.T) {
 	p := New(l)
 
 	program := p.ParseProgram()
+	checkParserErrors(t, p)
 	if program == nil {
 		t.Fatal("parse err")
 	}
@@ -71,4 +72,46 @@ func testLetStatement(t *testing.T, s ast.Statement, ident string) bool {
 		return false
 	}
 	return true
+}
+
+func checkParserErrors(t *testing.T, p *Perser) {
+	errors := p.errors
+	if len(errors) == 0 {
+		return
+	}
+
+	t.Errorf("parser has %d errors.\n", len(errors))
+	for _, v := range errors {
+		t.Errorf("parser error: %s\n", v)
+	}
+
+	t.FailNow()
+}
+
+func TestReturnStatements(t *testing.T) {
+	input := `
+	return 5;
+	return 10;
+	return 9fdsa;
+	`
+
+	l := lexer.New(input)
+	p := New(l)
+
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+	if program == nil {
+		t.Fatal("parse err")
+	}
+	// *******************todo: let, 識別し, 式　で長さが3か、入力のlet文が3つで3か
+	if len(program.Statements) != 3 {
+		t.Fatalf("")
+	}
+
+	for _, stmt := range program.Statements {
+		_, ok := stmt.(*ast.ReturnStatement)
+		if !ok {
+			t.Errorf("not return statement..")
+		}
+	}
 }
