@@ -40,6 +40,9 @@ func (p *Program) String() string {
 	return buf.String()
 }
 
+// ExpressionStatement は式文。式を表す部分全体をカバーするような構造体。
+// program > expressionstatement > identifier ...
+// みたいなイメージ。
 type ExpressionStatement struct {
 	Token      token.Token
 	Expression Expression
@@ -98,12 +101,13 @@ func (rs *ReturnStatement) String() string {
 	return buf.String()
 }
 
+// 識別子
 type Identifier struct {
 	Token token.Token
 	Value string
 }
 
-func (i *Identifier) identifiermentnode()  {}
+func (i *Identifier) expressionnode()      {}
 func (i *Identifier) TokenLiteral() string { return i.Token.Literal }
 func (i *Identifier) String() string {
 	return i.Value

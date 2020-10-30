@@ -74,6 +74,38 @@ func testLetStatement(t *testing.T, s ast.Statement, ident string) bool {
 	return true
 }
 
+//  識別子を識別子であると判別するテスト
+func TestIdentifierExpression(t *testing.T) {
+	input := "foooobar;"
+
+	l := lexer.New(input)
+	p := New(l)
+
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
+	}
+
+	// statement interfaceの中で、ExpressionStatement型であるか？(ひとまず式文として判定させる)
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
+	}
+
+	// expressioninterfaceの中で、さらにidentifierか？
+	ident, ok := stmt.Expression.(*ast.Identifier)
+	if !ok {
+		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
+	}
+
+	if ident.Value != "foooobar;" {
+		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
+	}
+
+}
+
 func checkParserErrors(t *testing.T, p *Perser) {
 	errors := p.errors
 	if len(errors) == 0 {

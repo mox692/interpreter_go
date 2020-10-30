@@ -7,8 +7,12 @@ import (
 	"interpt/token"
 )
 
-// parserパッケージでは、lexerで生成されたトークン列から、具体的なASTを作成する。
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
 
+// parserパッケージでは、lexerで生成されたトークン列から、具体的なASTを作成する。
 // perserはparse(token=>AST)の手段を提供するParseProgramメソッドを実装している構造体である。
 // lはlexerのポインタを保有している。
 // curTokenは現在解析を行っているtokenを保有している。
@@ -18,6 +22,9 @@ type Perser struct {
 	errors    []string
 	curToken  token.Token
 	peekToken token.Token
+
+	prefixParseFns map[token.TokenType]prefixParseFn
+	infixParseFns  map[token.TokenType]infixParseFn
 }
 
 // perserを生成する関数。lexerを引数にとる。
@@ -63,7 +70,7 @@ func (p *Perser) perseStatement() ast.Statement {
 	case token.RETURN:
 		return p.perseReturnStatement()
 	default:
-		return nil
+		return p.perseExpressionStatement()
 	}
 }
 
@@ -96,6 +103,18 @@ func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 	p.nextToken()
 
 	for !p.curTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
+}
+
+func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+
+	stmt.Expression = p.perseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
 
@@ -135,4 +154,12 @@ func (p *Perser) Errors() []string {
 func (p *Perser) peekError(t token.TokenType) {
 	msg := fmt.Sprintf("expected %s, but got %s", t, p.peekToken.Type)
 	p.errors = append(p.errors, msg)
+}
+
+func (p *Perser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Perser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
 }
