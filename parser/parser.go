@@ -5,6 +5,7 @@ import (
 	"interpt/ast"
 	"interpt/lexer"
 	"interpt/token"
+	"strconv"
 )
 
 type (
@@ -34,6 +35,7 @@ type Perser struct {
 	curToken  token.Token
 	peekToken token.Token
 
+	// key: token, value: 関数
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 }
@@ -46,6 +48,7 @@ func New(l *lexer.Lexer) *Perser {
 	}
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
+	p.registerPrefix(token.INT, p.parseIntegerLiteral)
 
 	p.nextToken()
 	p.nextToken()
@@ -187,11 +190,26 @@ func (p *Perser) peekError(t token.TokenType) {
 	p.errors = append(p.errors, msg)
 }
 
-// tokenと構文解析関数を結び付けている。
+// 第１引数のtokenに第２引数の構文解析関数を紐付けている。
 func (p *Perser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
 	p.prefixParseFns[tokenType] = fn
 }
 
 func (p *Perser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
 	p.infixParseFns[tokenType] = fn
+}
+
+func (p *Perser) parseIntegerLiteral() ast.Expression {
+	lit := &ast.IntegerLiteral{Token: p.curToken}
+
+	value, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
+	if err != nil {
+		msg := fmt.Sprintf("could not parse %q as integer", p.curToken.Literal)
+		p.errors = append(p.errors, msg)
+		return nil
+	}
+
+	lit.Value = value
+
+	return lit
 }
