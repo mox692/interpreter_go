@@ -100,7 +100,7 @@ func TestIdentifierExpression(t *testing.T) {
 		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
 	}
 
-	if ident.Value != "foooobar;" {
+	if ident.Value != "foooobar" {
 		t.Fatalf("program has not enoutg statement,want 1, got %d", len(program.Statements))
 	}
 

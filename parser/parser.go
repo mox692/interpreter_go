@@ -12,6 +12,17 @@ type (
 	infixParseFn  func(ast.Expression) ast.Expression
 )
 
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // > or <
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -X or !X
+	CALL        // myFunction(X)
+)
+
 // parserパッケージでは、lexerで生成されたトークン列から、具体的なASTを作成する。
 // perserはparse(token=>AST)の手段を提供するParseProgramメソッドを実装している構造体である。
 // lはlexerのポインタを保有している。
@@ -33,6 +44,8 @@ func New(l *lexer.Lexer) *Perser {
 		l:      l,
 		errors: []string{},
 	}
+	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
 
 	p.nextToken()
 	p.nextToken()
@@ -47,7 +60,8 @@ func (p *Perser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
-// inputからASTを生成。
+// inputからASTを生成します。
+// ParseProgramの中では、curTokenを進める毎にparseStatementを呼んで処理を移譲します。
 func (p *Perser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
 	program.Statements = []ast.Statement{}
@@ -63,6 +77,7 @@ func (p *Perser) ParseProgram() *ast.Program {
 	return program
 }
 
+// parserのcurTokenに応じて、構文解析関数を呼び出す関数。
 func (p *Perser) perseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.LET:
@@ -74,6 +89,7 @@ func (p *Perser) perseStatement() ast.Statement {
 	}
 }
 
+// let文を引き受けてLetstatementの構造体を返す。
 func (p *Perser) perseLetStatement() *ast.LetStatement {
 	stmt := &ast.LetStatement{Token: p.curToken}
 
@@ -97,6 +113,7 @@ func (p *Perser) perseLetStatement() *ast.LetStatement {
 	return stmt
 }
 
+//
 func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 	stmt := &ast.ReturnStatement{Token: p.curToken}
 
@@ -105,7 +122,7 @@ func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 	for !p.curTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
-
+	// *******************Todo: returnのvalueをどっかでsetしたいね。
 	return stmt
 }
 
@@ -119,6 +136,20 @@ func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
 	}
 
 	return stmt
+}
+
+func (p *Perser) perseExpression(precedence int) ast.Expression {
+
+	prefix := p.prefixParseFns[p.curToken.Type]
+	if prefix == nil {
+		return nil
+	}
+	leftExp := prefix()
+	return leftExp
+}
+
+func (p *Perser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Perser) peekTokenIs(t token.TokenType) bool {
@@ -156,6 +187,7 @@ func (p *Perser) peekError(t token.TokenType) {
 	p.errors = append(p.errors, msg)
 }
 
+// tokenと構文解析関数を結び付けている。
 func (p *Perser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
 	p.prefixParseFns[tokenType] = fn
 }
