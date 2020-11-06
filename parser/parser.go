@@ -49,6 +49,8 @@ func New(l *lexer.Lexer) *Perser {
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
+	p.registerPrefix(token.BANG, p.persePrefixExpression)
+	p.registerPrefix(token.MINUS, p.persePrefixExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -63,7 +65,7 @@ func (p *Perser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
-// inputからASTを生成します。
+// ParseProgram はinputからAST(Program構造体)を生成します。
 // ParseProgramの中では、curTokenを進める毎にparseStatementを呼んで処理を移譲します。
 func (p *Perser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
@@ -80,7 +82,8 @@ func (p *Perser) ParseProgram() *ast.Program {
 	return program
 }
 
-// parserのcurTokenに応じて、構文解析関数を呼び出す関数。
+// parserのcurTokenに応じて、構文解析関数を呼び出す関数です。
+// tokenを進める作業はそれぞれのparse関数に移譲します
 func (p *Perser) perseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.LET:
@@ -129,9 +132,11 @@ func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 	return stmt
 }
 
+// return文とlet文以外のtokenは一度全てこの関数にかけられます。
 func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
+	// この段階での「式文」を下位のperseExpressionに渡して、astノードを受け取る
 	stmt.Expression = p.perseExpression(LOWEST)
 
 	if p.peekTokenIs(token.SEMICOLON) {
@@ -141,12 +146,32 @@ func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
-func (p *Perser) perseExpression(precedence int) ast.Expression {
+func (p *Perser) persePrefixExpression() ast.Expression {
+	expression := &ast.PrefixExpression{
+		Token:    p.curToken,
+		Operator: p.curToken.Literal,
+	}
 
+	p.nextToken()
+
+	expression.Right = p.perseExpression(PREFIX)
+
+	return expression
+}
+
+func (p *Perser) noPrefixParseError(t token.TokenType) {
+	msg := fmt.Sprintf("no parse Fn is found for token `%s`\n", t)
+	p.errors = append(p.errors, msg)
+}
+
+func (p *Perser) perseExpression(precedence int) ast.Expression {
+	// 現在読んでいるtokenに紐づけられた構文解析関数を抽出している。
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
+		p.noPrefixParseError(p.curToken.Type)
 		return nil
 	}
+	// 構文解析関数を実行、返ってきたASTノードをleftExpに格納。
 	leftExp := prefix()
 	return leftExp
 }
