@@ -47,7 +47,7 @@ type Perser struct {
 	curToken  token.Token
 	peekToken token.Token
 
-	// key: token, value: 関数
+	// tokenと中置き演算子(前置演算子)を解析する関数とを結び付けているmap
 	prefixParseFns map[token.TokenType]prefixParseFn
 	infixParseFns  map[token.TokenType]infixParseFn
 }
@@ -58,6 +58,7 @@ func New(l *lexer.Lexer) *Perser {
 		l:      l,
 		errors: []string{},
 	}
+	// 前置演算子であるtokenと解析関数を結び付けている
 	p.prefixParseFns = make(map[token.TokenType]prefixParseFn)
 	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	p.registerPrefix(token.INT, p.parseIntegerLiteral)
@@ -106,6 +107,7 @@ func (p *Perser) ParseProgram() *ast.Program {
 
 // parserのcurTokenに応じて、構文解析関数を呼び出す関数です。
 // tokenを進める作業はそれぞれのparse関数に移譲します
+// curtokenがletかreturn以外だった場合は、全て式文というASTだとみなされます。
 func (p *Perser) perseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.LET:
@@ -132,8 +134,6 @@ func (p *Perser) perseLetStatement() *ast.LetStatement {
 		return nil
 	}
 
-	// todo.....
-	// stmt.Value =
 	for !p.curTokenIs(token.SEMICOLON) {
 		p.nextToken()
 	}
@@ -141,7 +141,6 @@ func (p *Perser) perseLetStatement() *ast.LetStatement {
 	return stmt
 }
 
-//
 func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 	stmt := &ast.ReturnStatement{Token: p.curToken}
 
@@ -155,6 +154,7 @@ func (p *Perser) perseReturnStatement() *ast.ReturnStatement {
 }
 
 // return文とlet文以外のtokenは一度全てこの関数にかけられます。
+// exporessionstatement構造体を返します。
 func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
 	stmt := &ast.ExpressionStatement{Token: p.curToken}
 
@@ -168,6 +168,34 @@ func (p *Perser) perseExpressionStatement() *ast.ExpressionStatement {
 	return stmt
 }
 
+func (p *Perser) perseExpression(precedence int) ast.Expression {
+	// 現在読んでいるtokenに紐づけられたprefix構文解析関数がもしあれば、prefixに代入(式のはじめは必ずprefixタイプのtokenがくる)
+	prefix := p.prefixParseFns[p.curToken.Type]
+	if prefix == nil {
+		p.noPrefixParseError(p.curToken.Type)
+		return nil
+	}
+	// 構文解析関数を実行、返ってきたASTノードをleftExpに格納。
+	// prefixが[-]とか[!]だった際は、裏でtokenも進められる。
+	leftExp := prefix()
+
+	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
+		infix := p.infixParseFns[p.peekToken.Type]
+		// もし中置き関数が見つからない(つまり、もう次のtokenがない場合は)
+		if infix == nil {
+			return leftExp
+		}
+
+		p.nextToken()
+		// infix構文解析関数を呼び出し、その結果をleftExpに代入していく(leftExpを使いまわしてるのに注意)
+		// 左側のASTをどんどん取り込んでいくイメージ
+		// このinfix関数の中で、leftExpがどんどん肥大化している様子が見えるはず？？
+		leftExp = infix(leftExp)
+	}
+
+	return leftExp
+}
+
 func (p *Perser) persePrefixExpression() ast.Expression {
 	expression := &ast.PrefixExpression{
 		Token:    p.curToken,
@@ -178,9 +206,14 @@ func (p *Perser) persePrefixExpression() ast.Expression {
 
 	expression.Right = p.perseExpression(PREFIX)
 
+	// RIghtが代入されたASTを返す
 	return expression
 }
 
+// parseInfixExpression中置き演算子の構文解析関数です。
+// 最終的にinfixのASTを返します。
+// prefix関数と違って引数を持つことに注意。
+// 内部でparseEexpressionを呼んでいて、再起になってい明日。
 func (p *Perser) parseInfixExpression(left ast.Expression) ast.Expression {
 	expression := &ast.InfixExpression{
 		Token:    p.curToken,
@@ -190,38 +223,16 @@ func (p *Perser) parseInfixExpression(left ast.Expression) ast.Expression {
 
 	precedence := p.curPrecedence()
 	p.nextToken()
+	// leftとrightを結合して、新たな1つのASTを生成している部分
 	expression.Right = p.perseExpression(precedence)
 
+	// LeftとRightがセットされた中置きASTが返る
 	return expression
 }
 
 func (p *Perser) noPrefixParseError(t token.TokenType) {
 	msg := fmt.Sprintf("no parse Fn is found for token `%s`\n", t)
 	p.errors = append(p.errors, msg)
-}
-
-func (p *Perser) perseExpression(precedence int) ast.Expression {
-	// 現在読んでいるtokenに紐づけられた構文解析関数を抽出している。
-	prefix := p.prefixParseFns[p.curToken.Type]
-	if prefix == nil {
-		p.noPrefixParseError(p.curToken.Type)
-		return nil
-	}
-	// 構文解析関数を実行、返ってきたASTノードをleftExpに格納。
-	leftExp := prefix()
-
-	for !p.peekTokenIs(token.SEMICOLON) && precedence < p.peekPrecedence() {
-		infix := p.infixParseFns[p.peekToken.Type]
-		if infix == nil {
-			return leftExp
-		}
-
-		p.nextToken()
-
-		leftExp = infix(leftExp)
-	}
-
-	return leftExp
 }
 
 func (p *Perser) parseIdentifier() ast.Expression {
@@ -288,6 +299,7 @@ func (p *Perser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
 	p.infixParseFns[tokenType] = fn
 }
 
+// curTokenからintValueを抜き出してastを返す関数
 func (p *Perser) parseIntegerLiteral() ast.Expression {
 	lit := &ast.IntegerLiteral{Token: p.curToken}
 

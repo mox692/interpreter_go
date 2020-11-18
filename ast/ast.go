@@ -59,7 +59,7 @@ func (p *Program) TokenLiteral() string {
 // ExpressionStatement は式文。式を表す部分全体をカバーするような構造体。
 // program > expressionstatement > identifier ...
 // みたいなイメージ。expressoionのラッパー??
-// monkeyでは a + b; みたいな式も許されるので。
+// ExpressionStatement自体も、内部のASTをいくつか含む
 type ExpressionStatement struct {
 	Token      token.Token
 	Expression Expression
@@ -149,6 +149,7 @@ func (il *IntegerLiteral) String() string {
 
 // PrefixExpression は前置演算子を表す構造体です。
 // Operatorに演算子そのものを、Rightにオペランドを格納します。
+// RightがExpressionを持つことができるので、再帰的にASTを構築することができる。
 type PrefixExpression struct {
 	Token    token.Token
 	Operator string
